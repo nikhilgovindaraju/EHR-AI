@@ -1,0 +1,245 @@
+/* .audit-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  background: linear-gradient(to right, #667eea, #764ba2);
+  padding: 3rem;
+  font-family: "Segoe UI", Roboto, sans-serif;
+}
+
+.audit-form-card {
+  background: white;
+  border-radius: 18px;
+  padding: 3rem 4rem;
+  width: 100%;
+  max-width: 1200px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+  animation: fadeSlideUp 0.5s ease;
+}
+
+.audit-form-card h2 {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #3c3dd2;
+  margin-bottom: 2rem;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.audit-form-card form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem 2rem;
+}
+
+.audit-form-card label {
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #333;
+}
+
+.audit-form-card input,
+.audit-form-card select,
+.audit-form-card textarea {
+  border-radius: 12px;
+  padding: 0.65rem 1rem;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  width: 100%;
+}
+
+.audit-form-card input:focus,
+.audit-form-card select:focus,
+.audit-form-card textarea:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.25);
+  outline: none;
+}
+
+.audit-form-card .btn {
+  grid-column: span 2;
+  padding: 0.75rem;
+  font-weight: 600;
+  font-size: 1rem;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.audit-form-card .btn-success {
+  background: #10b981;
+  border: none;
+  color: white;
+}
+
+.audit-form-card .btn-outline-secondary {
+  border: 2px solid #ef4444;
+  color: #ef4444;
+  background: transparent;
+}
+
+.toast-success {
+  background-color: #d1fae5;
+  color: #065f46;
+  padding: 12px 18px;
+  border-left: 5px solid #10b981;
+  border-radius: 10px;
+  font-weight: 500;
+  animation: fadeInOut 3s ease-in-out forwards;
+  text-align: center;
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(25px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(10px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-10px); }
+} */
+
+.audit-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding: 3rem 1rem;
+  background: linear-gradient(to right, #667eea, #764ba2);
+  font-family: "Segoe UI", Roboto, sans-serif;
+}
+
+.audit-form-card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 3rem;
+  width: 100%;
+  max-width: 1000px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  animation: fadeSlideUp 0.4s ease;
+}
+
+.audit-form-card h2 {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #3f3de8;
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.2rem 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-label {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #333;
+}
+
+.form-control,
+.form-select {
+  border-radius: 12px;
+  padding: 0.65rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  transition: all 0.2s ease-in-out;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.25);
+  outline: none;
+}
+
+textarea.form-control {
+  resize: vertical;
+  min-height: 100px;
+  grid-column: span 2;
+}
+
+.btn {
+  padding: 0.8rem 1rem;
+  font-weight: 600;
+  font-size: 1rem;
+  border-radius: 12px;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-success {
+  background: #10b981;
+  color: white;
+  border: none;
+  width: 100%;
+}
+
+.btn-success:hover {
+  background: #059669;
+}
+
+.btn-outline-secondary {
+  border: 2px solid #ef4444;
+  color: #ef4444;
+  width: 100%;
+  background: transparent;
+}
+
+.btn-outline-secondary:hover {
+  background-color: #fee2e2;
+  border-color: #dc2626;
+}
+
+.toast-success {
+  background-color: #d1fae5;
+  color: #065f46;
+  padding: 12px;
+  border-left: 5px solid #10b981;
+  border-radius: 10px;
+  font-weight: 500;
+  animation: fadeInOut 3s ease-in-out forwards;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(25px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(10px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-10px); }
+}
