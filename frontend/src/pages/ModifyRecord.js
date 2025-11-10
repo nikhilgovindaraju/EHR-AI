@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "../services/api";
-import "../styles/addaudit.css"; // Reuse the professional styles
+import "../styles/addaudit.css"; 
 import Layout from "../components/Layout";
 
 function ModifyRecord() {

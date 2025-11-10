@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../services/api";
-import "../styles/addaudit.css"; // Reuse existing styles
+import "../styles/addaudit.css"; 
 import Layout from "../components/Layout";
 
 function AddPatientRecord() {

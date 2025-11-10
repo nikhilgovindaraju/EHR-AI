@@ -9,6 +9,7 @@ import AddPatientRecord from "./pages/AddPatientRecord";
 import ModifyRecord from "./pages/ModifyRecord";
 import DeleteRecord from "./pages/DeleteRecord";
 import Layout from "./components/Layout";
+import "./styles/theme.css";
 
 function App() {
   return (

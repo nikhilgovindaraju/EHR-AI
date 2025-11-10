@@ -14,15 +14,15 @@ class User(Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String)                    # Who performed the action
-    patient_id = Column(String)                 # Patient record ID
+    user_id = Column(String)                   
+    patient_id = Column(String)                
     patient_name = Column(String, nullable=True)
     age = Column(Integer, nullable=True)
     diagnosis = Column(String, nullable=True)
     medication = Column(String, nullable=True)
-    notes = Column(String, nullable=True)        # Reason or description
+    notes = Column(String, nullable=True)       
 
-    action = Column(String)                     # create, delete, etc.
+    action = Column(String)                  
     encrypted_data = Column(LargeBinary)
     encrypted_aes_key = Column(LargeBinary)
     nonce = Column(String)

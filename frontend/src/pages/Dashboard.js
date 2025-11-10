@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "bootstrap-icons/font/bootstrap-icons.css";
 import "../styles/dashboard.css";
 import AuditChatbot from "../pages/AuditChatbot";
+import Layout from "../components/Layout";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ function Dashboard() {
   };
 
   return (
+    <Layout>
     <div className="dashboard-wrapper">
       <div className="dashboard-card-elevated">
         {/* Left Column */}
@@ -84,6 +86,7 @@ function Dashboard() {
       {/* Chatbot */}
         <AuditChatbot />
     </div>
+    </Layout>
   );
 }
 

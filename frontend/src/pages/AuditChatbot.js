@@ -1,88 +1,129 @@
 import React, { useState, useEffect, useRef } from "react";
 import "../styles/chatbot.css";
 import axios from "../services/api";
-import swoosh from "../assets/woosh.wav"; // 🛠️ Add this sound file in src/assets/
+import swoosh from "../assets/woosh.wav";
 
 function AuditChatbot() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { type: "bot", text: "👋 Hi! I’m your SecureEHR Assistant. How can I help today?" }
+    { type: "bot", text: "👋 Hi! I’m your SecureEHR Assistant. Ask about a patient or your recent cases." }
   ]);
   const [input, setInput] = useState("");
+  const [patientId, setPatientId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showContextIdx, setShowContextIdx] = useState(null);
+
   const messagesEndRef = useRef(null);
   const audioRef = useRef(null);
 
+  const userId = localStorage.getItem("user_id");
+  const role = localStorage.getItem("role");
+
+  const storedPatientId = (localStorage.getItem("patient_id") || "").trim();
+
+useEffect(() => {
+  if (role === "patient") {
+    setPatientId(storedPatientId || userId || "");
+  }
+}, [role, storedPatientId, userId]);
+
   const quickQuestions = [
-    "How many patients are there?",
-    "List patient IDs.",
-    "When was the last visit?",
-    "Show all diagnoses."
+    "Show Patient1’s last visit summary",
+    "List the most common diagnosis in my last 10 cases",
+    "Summarize medications for Patient1",
+    "When was the last visit?"
   ];
 
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const playSound = () => audioRef.current?.play();
 
-  const playSound = () => {
-    audioRef.current?.play();
-  };
-
-  const sendMessage = async (msg) => {
-    const content = msg || input.trim();
+  const sendMessage = async (preset) => {
+    const content = preset || input.trim();
     if (!content) return;
-  
-    const userMessage = { type: "user", text: content };
-    setMessages((prev) => [...prev, userMessage]);
+
+    setMessages((prev) => [...prev, { type: "user", text: content }]);
     setInput("");
     playSound();
     setLoading(true);
-  
-    const lower = content.toLowerCase();
-  
-    // 🧠 Handle via backend SQL-based FAQs
-    const isFAQ = lower.includes("how many") ||
-                  lower.includes("list patient") ||
-                  lower.includes("last visit") ||
-                  lower.includes("diagnoses") ||
-                  lower.includes("summary") ||
-                  lower.includes("patient detail") ||
-                  lower.includes("recent visit");
-  
+
     try {
-      let res;
-  
-      if (isFAQ) {
-        // If asking for patient summary, optionally add patient ID
-        const payload = { question: content };
-        const pid = content.match(/patient\s+(\w+)/i)?.[1];
-        if (pid) payload.patient_id = pid;
-  
-        res = await axios.post("/api/audit/faq-query", payload);
-      } else {
-        // Fallback to OpenAI if it's a general question
-        res = await axios.post("/api/audit/chatbot", { message: content });
-      }
-  
-      const reply = res.data.reply || "🤖 I couldn't find the answer to that.";
-      setMessages((prev) => [...prev, { type: "bot", text: reply }]);
+      const { data } = await axios.post("/api/audit/chat", {
+        user_id: userId,
+        role,
+        question: content,
+        patient_id: role === "patient" ? (patientId || userId) : (patientId || undefined),
+        patient_name: role === "patient" ? userId : undefined,
+      });
+
+      const botMsg = {
+        type: "bot",
+        text: data?.answer || "🤖 I couldn't find the answer to that.",
+        stats: data?.stats || null,
+        rows: Array.isArray(data?.rows) ? data.rows : [],
+      };
+      setMessages((prev) => [...prev, botMsg]);
       playSound();
     } catch (err) {
-      console.error(err);
+      console.error("Chat error:", err?.response?.data || err.message);
       setMessages((prev) => [
         ...prev,
-        { type: "bot", text: "❌ Error processing your request." }
+        { type: "bot", text: "❌ Error processing your request." },
       ]);
     } finally {
       setLoading(false);
     }
   };
-  
-  
+
+  const StatChips = ({ stats }) => {
+    if (!stats) return null;
+    const diag = (stats.top_diagnoses || []).map(([d, c]) => `${d} (${c})`).join(", ");
+    const meds = (stats.top_medications || []).map(([m, c]) => `${m} (${c})`).join(", ");
+    return (
+      <div className="chatbot-stats">
+        <span className="chip">Total logs: {stats.total_logs}</span>
+        {stats.last_visit && <span className="chip">Last visit: {new Date(stats.last_visit).toLocaleString()}</span>}
+        {diag && <span className="chip">Top Dx: {diag}</span>}
+        {meds && <span className="chip">Top Meds: {meds}</span>}
+      </div>
+    );
+  };
+
+  const ContextTable = ({ rows }) => {
+    if (!rows || rows.length === 0) return <div className="text-muted">No context records.</div>;
+    return (
+      <div className="ctx-table-wrap">
+        <table className="ctx-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Patient</th>
+              <th>Age</th>
+              <th>Diagnosis</th>
+              <th>Medication</th>
+              <th>Notes</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td>{r.timestamp ? new Date(r.timestamp).toLocaleString() : "—"}</td>
+                <td>{r.patient_name || r.patient_id || "—"}</td>
+                <td>{r.age ?? "—"}</td>
+                <td>{r.diagnosis || "—"}</td>
+                <td>{r.medication || "—"}</td>
+                <td>{(r.notes || "").toString().trim() || "—"}</td>
+                <td>{r.action || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -101,11 +142,37 @@ function AuditChatbot() {
             </button>
           </div>
 
+          {/* Optional target patient */}
+          <div className="chatbot-toolbar">
+            <input
+              className="chatbot-patient"
+              placeholder="(Optional) Patient ID, e.g., Patient1"
+              value={patientId}
+              onChange={(e) => setPatientId(e.target.value)}
+            />
+          </div>
+
           <div className="chatbot-body">
-            {messages.map((msg, i) => (
-              <div key={i} className={`message ${msg.type}`}>{msg.text}</div>
+            {messages.map((m, i) => (
+              <div key={i} className={`message ${m.type}`}>
+                <div style={{ whiteSpace: "pre-wrap" }}>{m.text}</div>
+
+                {/* Render stats + toggle for context when present */}
+                {m.type === "bot" && (!/^(last visit:|medications mentioned|your doctor|recent visits summary)/i.test(m.text)) && (m.stats || (m.rows && m.rows.length > 0)) && (
+                  <>
+                    <StatChips stats={m.stats} />
+                    <button
+                      className="ctx-toggle"
+                      onClick={() => setShowContextIdx(showContextIdx === i ? null : i)}
+                    >
+                      {showContextIdx === i ? "Hide context ▲" : "Show context ▼"}
+                    </button>
+                    {showContextIdx === i && <ContextTable rows={m.rows} />}
+                  </>
+                )}
+              </div>
             ))}
-            {loading && <div className="message bot">⏳ Typing...</div>}
+            {loading && <div className="message bot">⏳ Thinking…</div>}
             <div ref={messagesEndRef} />
           </div>
 
@@ -118,7 +185,7 @@ function AuditChatbot() {
           <div className="chatbot-input-area">
             <input
               type="text"
-              placeholder="Type a message..."
+              placeholder='Try: "Show Patient1’s last visit summary"'
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
@@ -134,3 +201,4 @@ function AuditChatbot() {
 }
 
 export default AuditChatbot;
+

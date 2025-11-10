@@ -9,24 +9,27 @@ function AddAuditRecord() {
   const userId = localStorage.getItem("user_id");
 
   const [step, setStep] = useState(1);
-  const [action, setAction] = useState("");
+  const [action, setAction] = useState("");         
   const [patientId, setPatientId] = useState("");
+
   const [formData, setFormData] = useState({
     patient_name: "",
     age: "",
     gender: "",
     diagnosis: "",
     medication: "",
-    data: "",
+    data: "",                                       
     visit_date: new Date().toISOString().split("T")[0],
     vitals: "",
   });
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [patientFound, setPatientFound] = useState(false); 
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData((f) => ({ ...f, [e.target.name]: e.target.value }));
   };
 
   const handleNext = async () => {
@@ -36,29 +39,50 @@ function AddAuditRecord() {
     }
 
     try {
+      setError("");
       const params = { user_id: userId, role: "doctor" };
-      const response = await axios.get("/api/audit/logs", { params });
-      const match = response.data.logs.find((log) => log.patient_id === patientId);
+      const resp = await axios.get("/api/audit/logs", { params });
+      const allLogs = Array.isArray(resp?.data?.logs) ? resp.data.logs : [];
+      const patientLogs = allLogs
+        .filter((l) => String(l.patient_id) === String(patientId))
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-      if (action === "create" && match) {
-        setError("Patient already exists. Please use Modify or Delete.");
-      } else if ((action === "modify" || action === "delete") && !match) {
-        setError("Patient does not exist.");
-      } else {
-        setError("");
+      const latest = patientLogs[0];
+
+      if (action === "modify" || action === "delete") {
+        if (!latest) {
+          setError("Patient does not exist. You can only modify/delete an existing patient’s records.");
+          return;
+        }
+      
         if (action === "modify") {
           navigate("/modify", { state: { patientId } });
-        } else if (action === "delete") {
-          navigate("/delete", { state: { patientId } });
         } else {
-          setStep(2);
+          navigate("/delete", { state: { patientId } });
         }
+        return;
       }
+
+      // action === "create" → ALWAYS allow adding another visit/log
+      if (latest) {
+        // Prefill demographics from the latest record to save typing
+        setPatientFound(true);
+        setFormData((f) => ({
+          ...f,
+          patient_name: latest.patient_name || f.patient_name,
+          age: latest.age || f.age,
+          gender: latest.gender || f.gender, // will show blank if you don't store gender in logs
+        }));
+      } else {
+        setPatientFound(false);
+      }
+
+      setStep(2);
     } catch (err) {
+      console.error("Error checking patient:", err?.response?.data || err.message);
       setError("Error checking patient records.");
     }
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -67,8 +91,8 @@ function AddAuditRecord() {
     const payload = {
       user_id: userId,
       patient_id: patientId,
-      action,
-      ...formData,
+      action: (action || "create").toUpperCase(), 
+      ...formData,                                 
     };
 
     try {
@@ -76,11 +100,9 @@ function AddAuditRecord() {
         headers: { "Content-Type": "application/json" },
       });
       setShowSuccess(true);
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 3000);
+      setTimeout(() => navigate("/dashboard"), 1500);
     } catch (err) {
-      console.error("API error:", err);
+      console.error("API error:", err?.response?.data || err.message);
       setError("❌ Failed to submit record.");
     } finally {
       setLoading(false);

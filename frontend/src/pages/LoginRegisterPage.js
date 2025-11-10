@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "../services/api"; // ✅ Axios instance
+import axios from "../services/api"; 
 import "bootstrap/dist/css/bootstrap.min.css";
-import "../styles/loginregister.css"; // ✅ Custom styles
+import "../styles/loginregister.css"; 
 import Layout from "../components/Layout";
+
 
 function LoginRegisterPage() {
   const navigate = useNavigate();
@@ -38,7 +39,7 @@ function LoginRegisterPage() {
           setShowSplash(true);
           setTimeout(() => {
             navigate("/dashboard");
-          }, 1000); // Delay for splash screen
+          }, 1000); 
         } else {
           setError("Invalid credentials");
         }

@@ -1,0 +1,39 @@
+# Node dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Build / Coverage
+/coverage
+/build
+/dist
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.log
+*.sqlite3
+*.db
+.vscode/
+.idea/
+
+# Environment files (both frontend and backend)
+.env
+.env.*
+frontend/.env
+ehr-backend/.env
+
+# Private crypto keys (do NOT upload)
+ehr-backend/crypto/keys/*
+ehr-backend/public_keys/*
+!ehr-backend/public_keys/README.md  # if you want to document key usage
+
+# Python virtual environment
+ehr-backend/.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Render build cache
+render.yaml
