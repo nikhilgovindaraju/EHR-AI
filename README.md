@@ -20,7 +20,26 @@ It combines:
 
 ---
 
-## 🔐 Core Features
+## 🚀 Features
+
+- **Decentralized Audit Logging**  
+  Blockchain-style chained logs that detect tampering and ensure immutability.  
+- **Cryptographic Security**  
+  Hybrid RSA-AES encryption, digital signatures, and key-pair generation for every user.  
+- **Role-based Access Control (RBAC)**  
+  Doctors, Patients, and Auditors each have distinct access privileges.  
+- **FastAPI Backend**  
+  Scalable REST API using SQLAlchemy and Supabase (PostgreSQL).  
+- **React Frontend (Bootstrap 5)**  
+  Polished and responsive interface with login, registration, dashboard, and logs view.  
+- **OpenAI Chatbot Integration**  
+  Context-aware assistant for summarizing patient records and answering EHR-related queries.  
+- **CORS-Enabled Local + Cloud Support**  
+  Seamlessly switch between localhost and deployed Render environments.
+
+---
+
+## 🔐 Core Functionalities
 
 ### 1️⃣ Secure Audit Logging
 - Add, modify, or delete audit records with patient metadata:
