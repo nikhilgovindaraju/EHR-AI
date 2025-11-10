@@ -8,23 +8,29 @@ from models.schemas import RegisterUser, LoginUser, AuditLogCreate
 from crypto.generate_keys import generate_keys  
 from routers import audit  
 import base64, datetime
+import os
 
 app = FastAPI()
 
-@app.get("/api/health")
-def health():
-    return {"status": "ok"}
+# @app.get("/api/health")
+# def health():
+#     return {"status": "ok"}
 
 
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+FRONTEND_URL = "http://localhost:3000"
+
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,         # required if axios uses withCredentials
+    allow_methods=["*"],            # or list: ["GET","POST","PUT","DELETE","OPTIONS"]
+    allow_headers=["*"],            # include custom headers like Authorization
 )
 
 init_db()
@@ -34,7 +40,7 @@ app.include_router(audit.router, prefix="/api/audit")
 def index():
     return {"message": "Secure EHR API is running."}
 
-@app.post("/register")
+@app.post("/api/register")
 def register_user(user: RegisterUser, db: Session = Depends(get_db)):
     hashed_pw = hash_password(user.password)
     new_user = User(user_id=user.user_id, password=hashed_pw, role=user.role)
@@ -45,7 +51,7 @@ def register_user(user: RegisterUser, db: Session = Depends(get_db)):
 
     return {"message": f"User {user.user_id} registered successfully."}
 
-@app.post("/login")
+@app.post("/api/login")
 def login_user(user: LoginUser, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.user_id == user.user_id, User.role == user.role).first()
     if not db_user or not verify_password(user.password, db_user.password):

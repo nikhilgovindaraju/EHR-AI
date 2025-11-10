@@ -1,39 +1,44 @@
-# Node dependencies
-/node_modules
-/.pnp
-.pnp.js
+# === Node.js ===
+node_modules/*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+frontend/node_modules/*
 
-# Build / Coverage
-/coverage
-/build
-/dist
-
-# OS / Editor
-.DS_Store
-Thumbs.db
-*.log
-*.sqlite3
-*.db
-.vscode/
-.idea/
-
-# Environment files (both frontend and backend)
-.env
-.env.*
-frontend/.env
-ehr-backend/.env
-
-# Private crypto keys (do NOT upload)
-ehr-backend/crypto/keys/*
-ehr-backend/public_keys/*
-!ehr-backend/public_keys/README.md  # if you want to document key usage
-
-# Python virtual environment
-ehr-backend/.venv/
+# === Python ===
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
+*.py.class
+*.egg-info/
+.venv/
+env/
+venv/
+Pipfile.lock
 
-# Render build cache
-render.yaml
+# === Environment Files ===
+.env
+ehr-backend/.env
+ehr-backend/crypto/keys/*
+ehr-backend/keys/*
+*.pem
+
+# === Build Output ===
+/build
+/dist
+/frontend/build
+/frontend/.next
+
+# === IDE & System ===
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Cache ===
+.cache/
+frontend/node_modules/.cache/*
+*.log
