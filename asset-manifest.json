@@ -1,0 +1,25 @@
+{
+  "files": {
+    "main.css": "/EHR-AI/static/css/main.6a993e0b.css",
+    "main.js": "/EHR-AI/static/js/main.a8f9c1ab.js",
+    "static/js/762.73d9b8ef.chunk.js": "/EHR-AI/static/js/762.73d9b8ef.chunk.js",
+    "static/js/857.6f83c471.chunk.js": "/EHR-AI/static/js/857.6f83c471.chunk.js",
+    "static/js/239.c683f289.chunk.js": "/EHR-AI/static/js/239.c683f289.chunk.js",
+    "static/js/977.2fe294a2.chunk.js": "/EHR-AI/static/js/977.2fe294a2.chunk.js",
+    "static/js/455.d309f53a.chunk.js": "/EHR-AI/static/js/455.d309f53a.chunk.js",
+    "static/media/bootstrap-icons.woff?": "/EHR-AI/static/media/bootstrap-icons.1295669cd4e305c97f2c.woff",
+    "static/media/bootstrap-icons.woff2?": "/EHR-AI/static/media/bootstrap-icons.92ea18a81d737146ff04.woff2",
+    "index.html": "/EHR-AI/index.html",
+    "main.6a993e0b.css.map": "/EHR-AI/static/css/main.6a993e0b.css.map",
+    "main.a8f9c1ab.js.map": "/EHR-AI/static/js/main.a8f9c1ab.js.map",
+    "762.73d9b8ef.chunk.js.map": "/EHR-AI/static/js/762.73d9b8ef.chunk.js.map",
+    "857.6f83c471.chunk.js.map": "/EHR-AI/static/js/857.6f83c471.chunk.js.map",
+    "239.c683f289.chunk.js.map": "/EHR-AI/static/js/239.c683f289.chunk.js.map",
+    "977.2fe294a2.chunk.js.map": "/EHR-AI/static/js/977.2fe294a2.chunk.js.map",
+    "455.d309f53a.chunk.js.map": "/EHR-AI/static/js/455.d309f53a.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.6a993e0b.css",
+    "static/js/main.a8f9c1ab.js"
+  ]
+}

@@ -1,0 +1,44 @@
+# === Node.js ===
+node_modules/*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+frontend/node_modules/*
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.py.class
+*.egg-info/
+.venv/
+env/
+venv/
+Pipfile.lock
+
+# === Environment Files ===
+.env
+ehr-backend/.env
+ehr-backend/crypto/keys/*
+ehr-backend/keys/*
+*.pem
+
+# === Build Output ===
+/build
+/dist
+/frontend/build
+/frontend/.next
+
+# === IDE & System ===
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Cache ===
+.cache/
+frontend/node_modules/.cache/*
+*.log
