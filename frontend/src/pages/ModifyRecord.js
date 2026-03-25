@@ -1,185 +1,233 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import axios from "../services/api";
-import "../styles/addaudit.css"; 
-import Layout from "../components/Layout";
+import api from "../services/api";
+import Sidebar from "../components/Sidebar";
 
-function ModifyRecord() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const incomingPatientId = location.state?.patientId;
+const GENDERS = ["Male","Female","Non-binary","Prefer not to say"];
 
-  const userId = localStorage.getItem("user_id");
-  const role = localStorage.getItem("role");
+export default function ModifyRecord() {
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const userId    = localStorage.getItem("user_id");
+  const role      = localStorage.getItem("role");
 
-  const [logs, setLogs] = useState([]);
-  const [selectedLog, setSelectedLog] = useState(null);
-  const [formData, setFormData] = useState({});
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [logs, setLogs]         = useState([]);
+  const [selected, setSelected] = useState(location.state?.log || null);
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState("");
+  const [success, setSuccess]   = useState("");
 
-  useEffect(() => {
-    if (!userId || role !== "doctor") {
-      navigate("/");
-    } else {
-      fetchLogs();
-    }
-  }, []);
-
-  const fetchLogs = async () => {
-    try {
-      const params = { user_id: userId, role };
-      const response = await axios.get("/api/audit/logs", { params });
-      setLogs(response.data.logs);
-    } catch {
-      setError("Failed to load logs.");
-    }
-  };
+  const [form, setForm] = useState({
+    patient_name:"", age:"", gender:"Male",
+    visit_date:"", vitals:"", diagnosis:"", medication:"", notes:""
+  });
 
   useEffect(() => {
-    if (incomingPatientId && logs.length > 0) {
-      const match = logs.find((log) => log.patient_id === incomingPatientId);
-      if (match) handleEdit(match);
+    if (!userId) { navigate("/"); return; }
+    api.get("/api/audit/logs", { params: { role, user_id: userId } })
+      .then(r => setLogs(r.data.logs || []))
+      .catch(() => setError("Failed to load records."))
+      .finally(() => setLoading(false));
+  }, [userId, role, navigate]);
+
+  useEffect(() => {
+    if (selected) {
+      setForm({
+        patient_name: selected.patient_name || "",
+        age:          selected.age != null ? String(selected.age) : "",
+        gender:       selected.gender   || "Male",
+        visit_date:   selected.visit_date || "",
+        vitals:       selected.vitals    || "",
+        diagnosis:    selected.diagnosis || "",
+        medication:   selected.medication|| "",
+        notes:        selected.notes     || "",
+      });
     }
-  }, [logs, incomingPatientId]);
+  }, [selected]);
 
-  const handleEdit = (log) => {
-    setSelectedLog(log);
-    setFormData({ ...log });
-    setSuccess("");
-    setError("");
-  };
+  function setF(field, value) { setForm(f => ({ ...f, [field]: value })); }
 
-  const handleChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleSubmit = async (e) => {
+  async function handleSave(e) {
     e.preventDefault();
-    const payload = {
-      patient_name: formData.patient_name || "",
-      age: formData.age !== "" ? parseInt(formData.age) : null,
-      gender: formData.gender || "",
-      diagnosis: formData.diagnosis || "",
-      medication: formData.medication || "",
-      notes: formData.notes || "",
-      visit_date: formData.visit_date || new Date().toISOString().split("T")[0],
-      vitals: formData.vitals || ""
-    };
-
+    if (!form.diagnosis) { setError("Diagnosis is required."); return; }
+    setSaving(true); setError(""); setSuccess("");
     try {
-      await axios.put(`/api/audit/modify-log/${selectedLog.id}`, payload);
-      setSuccess("✅ Record updated!");
-      setTimeout(() => navigate("/dashboard"), 1500);
+      await api.put(`/api/audit/modify-log/${selected.id}`, {
+        patient_name: form.patient_name || undefined,
+        age:          form.age ? parseInt(form.age) : undefined,
+        gender:       form.gender       || undefined,
+        visit_date:   form.visit_date   || undefined,
+        vitals:       form.vitals       || undefined,
+        diagnosis:    form.diagnosis    || undefined,
+        medication:   form.medication   || undefined,
+        notes:        form.notes        || undefined,
+      });
+      setSuccess("Record updated successfully.");
+      setTimeout(() => navigate("/logs"), 1200);
     } catch (err) {
-      console.error("❌ Update failed:", err.response?.data || err.message);
-      if (Array.isArray(err.response?.data?.detail)) {
-        const messages = err.response.data.detail.map((d) => d.msg).join(" | ");
-        setError(messages);
-      } else {
-        setError("❌ Update failed.");
-      }
-    }
-  };
+      setError(err.response?.data?.detail || "Update failed.");
+    } finally { setSaving(false); }
+  }
+
+  const sortedLogs = [...logs].sort((a,b) => new Date(b.timestamp)-new Date(a.timestamp));
 
   return (
-    <Layout>
-      <div className="audit-wrapper">
-        <div className="audit-form-card">
-          <h2><i className="bi bi-pencil-square"></i> Modify Patient Record</h2>
+    <div className="ehr-shell">
+      <Sidebar activeItem="logs" />
+      <main className="ehr-main">
+        <div className="ehr-topbar">
+          <div className="ehr-breadcrumb">
+            <button type="button" onClick={() => navigate("/dashboard")}>Dashboard</button>
+            <i className="bi bi-chevron-right" style={{ fontSize:10 }} />
+            <button type="button" onClick={() => navigate("/logs")}>Audit Logs</button>
+            <i className="bi bi-chevron-right" style={{ fontSize:10 }} />
+            <span>Modify Record</span>
+          </div>
+          <div className="ehr-topbar-title" />
+        </div>
 
-          {selectedLog ? (
-            <form onSubmit={handleSubmit}>
-              <div className="row gx-4 gy-3">
-                <div className="col-md-6">
-                  <label className="form-label"><i className="bi bi-person"></i> Patient Name</label>
-                  <input className="form-control" name="patient_name" value={formData.patient_name || ""} onChange={handleChange} />
-                </div>
+        <div className="ehr-content">
+          <div className="ehr-page-header">
+            <div className="ehr-page-title">Modify Record</div>
+            <div className="ehr-page-sub">Select a record from the table, then edit its fields</div>
+          </div>
 
-                <div className="col-md-6">
-                  <label className="form-label"><i className="bi bi-123"></i> Age</label>
-                  <input type="number" className="form-control" name="age" value={formData.age || ""} onChange={handleChange} />
-                </div>
+          {error   && <div className="ehr-alert ehr-alert-error"><i className="bi bi-exclamation-circle-fill" />{error}</div>}
+          {success && <div className="ehr-alert ehr-alert-success"><i className="bi bi-check-circle-fill" />{success}</div>}
 
-                <div className="col-md-6">
-                  <label className="form-label"><i className="bi bi-gender-ambiguous"></i> Gender</label>
-                  <select className="form-select" name="gender" value={formData.gender || ""} onChange={handleChange}>
-                    <option value="">Select Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-
-                <div className="col-md-6">
-                  <label className="form-label"><i className="bi bi-clipboard-heart"></i> Diagnosis</label>
-                  <input className="form-control" name="diagnosis" value={formData.diagnosis || ""} onChange={handleChange} />
-                </div>
-
-                <div className="col-md-6">
-                  <label className="form-label"><i className="bi bi-capsule"></i> Medication</label>
-                  <input className="form-control" name="medication" value={formData.medication || ""} onChange={handleChange} />
-                </div>
-
-                <div className="col-md-6">
-                  <label className="form-label"><i className="bi bi-calendar-date"></i> Visit Date</label>
-                  <input type="date" className="form-control" name="visit_date" value={formData.visit_date || ""} onChange={handleChange} />
-                </div>
-
-                <div className="col-md-6">
-                  <label className="form-label"><i className="bi bi-heart-pulse"></i> Vital Signs</label>
-                  <input className="form-control" name="vitals" value={formData.vitals || ""} onChange={handleChange} />
-                </div>
-
-                <div className="col-md-6">
-                  <label className="form-label"><i className="bi bi-journal-text"></i> Doctor's Notes</label>
-                  <textarea className="form-control" rows="4" name="notes" value={formData.notes || ""} onChange={handleChange} />
+          {!selected ? (
+            /* Record picker */
+            loading ? (
+              <div style={{ textAlign:"center", padding:48, color:"var(--text-muted)" }}>
+                <div className="ehr-spinner ehr-spinner-dark" style={{ margin:"0 auto 12px" }} /> Loading records…
+              </div>
+            ) : sortedLogs.length === 0 ? (
+              <div className="ehr-empty">
+                <div className="ehr-empty-icon"><i className="bi bi-journal-x" /></div>
+                <div className="ehr-empty-title">No records found</div>
+                <div className="ehr-empty-sub">Add a record first before modifying.</div>
+                <button className="ehr-btn ehr-btn-primary" onClick={() => navigate("/add")}><i className="bi bi-plus-lg" /> Add Record</button>
+              </div>
+            ) : (
+              <div className="ehr-table-wrap">
+                <table className="ehr-table">
+                  <thead>
+                    <tr>
+                      <th>Patient</th>
+                      <th>Diagnosis</th>
+                      <th>Doctor</th>
+                      <th>Date</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedLogs.map(log => (
+                      <tr key={log.id}>
+                        <td>
+                          <div style={{ fontWeight:500 }}>{log.patient_name || "—"}</div>
+                          <div style={{ fontSize:12, color:"var(--text-muted)", fontFamily:"var(--font-mono)" }}>{log.patient_id}</div>
+                        </td>
+                        <td>{log.diagnosis || "—"}</td>
+                        <td style={{ fontSize:13, color:"var(--text-muted)" }}>{log.user_id}</td>
+                        <td style={{ fontSize:13, color:"var(--text-muted)", fontFamily:"var(--font-mono)" }}>
+                          {new Date(log.timestamp).toLocaleDateString()}
+                        </td>
+                        <td>
+                          <button className="ehr-btn ehr-btn-ghost ehr-btn-sm" onClick={() => setSelected(log)}>
+                            <i className="bi bi-pencil" /> Edit
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : (
+            /* Edit form */
+            <form onSubmit={handleSave}>
+              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+                <button type="button" className="ehr-btn ehr-btn-ghost ehr-btn-sm" onClick={() => setSelected(null)}>
+                  <i className="bi bi-arrow-left" /> Back to list
+                </button>
+                <div style={{ fontSize:14, color:"var(--text-muted)" }}>
+                  Editing record for <strong>{selected.patient_name || selected.patient_id}</strong>
+                  <span style={{ fontFamily:"var(--font-mono)", marginLeft:8, fontSize:12 }}>#{selected.id}</span>
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-success w-100 mt-4">
-                Update Record
-              </button>
-              <button type="button" className="btn btn-outline-secondary w-100 mt-2" onClick={() => setSelectedLog(null)}>
-                Cancel
-              </button>
-            </form>
-          ) : (
-            <>
-              <p className="subtext">Click “Edit” to modify a record:</p>
-              <table className="logs-table">
-                <thead>
-                  <tr>
-                    <th>Patient ID</th>
-                    <th>Name</th>
-                    <th>Diagnosis</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.map((log) => (
-                    <tr key={log.id}>
-                      <td>{log.patient_id}</td>
-                      <td>{log.patient_name}</td>
-                      <td>{log.diagnosis}</td>
-                      <td>
-                        <button className="btn btn-sm btn-primary" onClick={() => handleEdit(log)}>
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
+              <div className="ehr-grid-2" style={{ gap:24, alignItems:"start" }}>
+                <div className="ehr-card">
+                  <div className="ehr-card-header">
+                    <i className="bi bi-person-vcard" style={{ color:"var(--blue)" }} />
+                    <span className="ehr-card-title">Patient Demographics</span>
+                  </div>
+                  <div className="ehr-card-body">
+                    <div className="ehr-form-group">
+                      <label className="ehr-label">Full Name</label>
+                      <input className="ehr-input" value={form.patient_name} onChange={e => setF("patient_name",e.target.value)} placeholder="Jane Doe" />
+                    </div>
+                    <div className="ehr-grid-2">
+                      <div className="ehr-form-group">
+                        <label className="ehr-label">Age</label>
+                        <input className="ehr-input" type="number" min="0" max="150" value={form.age} onChange={e => setF("age",e.target.value)} placeholder="42" />
+                      </div>
+                      <div className="ehr-form-group">
+                        <label className="ehr-label">Gender</label>
+                        <select className="ehr-select" value={form.gender} onChange={e => setF("gender",e.target.value)}>
+                          {GENDERS.map(g => <option key={g}>{g}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="ehr-form-group">
+                      <label className="ehr-label">Visit Date</label>
+                      <input className="ehr-input" type="date" value={form.visit_date} onChange={e => setF("visit_date",e.target.value)} />
+                    </div>
+                    <div className="ehr-form-group" style={{ marginBottom:0 }}>
+                      <label className="ehr-label">Vitals</label>
+                      <input className="ehr-input" value={form.vitals} onChange={e => setF("vitals",e.target.value)} placeholder="BP 120/80, HR 72" />
+                    </div>
+                  </div>
+                </div>
 
-          {error && <div className="text-danger text-center mt-3">{error}</div>}
-          {success && <div className="text-success text-center mt-3">{success}</div>}
+                <div className="ehr-card">
+                  <div className="ehr-card-header">
+                    <i className="bi bi-clipboard2-pulse" style={{ color:"var(--teal)" }} />
+                    <span className="ehr-card-title">Clinical Details</span>
+                  </div>
+                  <div className="ehr-card-body">
+                    <div className="ehr-form-group">
+                      <label className="ehr-label">Diagnosis <span className="req">*</span></label>
+                      <input className="ehr-input" value={form.diagnosis} onChange={e => setF("diagnosis",e.target.value)} placeholder="e.g. Hypertension" />
+                    </div>
+                    <div className="ehr-form-group">
+                      <label className="ehr-label">Medication</label>
+                      <input className="ehr-input" value={form.medication} onChange={e => setF("medication",e.target.value)} placeholder="e.g. Lisinopril 10mg" />
+                    </div>
+                    <div className="ehr-form-group" style={{ marginBottom:0 }}>
+                      <label className="ehr-label">Doctor's Notes</label>
+                      <textarea className="ehr-textarea" value={form.notes} onChange={e => setF("notes",e.target.value)} style={{ minHeight:120 }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display:"flex", gap:12, marginTop:20 }}>
+                <button type="button" className="ehr-btn ehr-btn-ghost" onClick={() => setSelected(null)}>
+                  <i className="bi bi-x" /> Cancel
+                </button>
+                <button type="submit" className="ehr-btn ehr-btn-primary" disabled={saving}>
+                  {saving
+                    ? <><div className="ehr-spinner" /> Saving…</>
+                    : <><i className="bi bi-check-lg" /> Save Changes</>
+                  }
+                </button>
+              </div>
+            </form>
+          )}
         </div>
-      </div>
-    </Layout>
+      </main>
+    </div>
   );
 }
-
-export default ModifyRecord;

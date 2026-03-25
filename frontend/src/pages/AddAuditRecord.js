@@ -1,215 +1,315 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "../services/api";
-import "../styles/addaudit.css";
-import Layout from "../components/Layout";
+import api from "../services/api";
+import Sidebar from "../components/Sidebar";
 
-function AddAuditRecord() {
+const GENDERS = ["Male","Female","Non-binary","Prefer not to say"];
+
+export default function AddAuditRecord() {
   const navigate = useNavigate();
-  const userId = localStorage.getItem("user_id");
+  const userId   = localStorage.getItem("user_id");
+  const role     = localStorage.getItem("role");
 
-  const [step, setStep] = useState(1);
-  const [action, setAction] = useState("");         
-  const [patientId, setPatientId] = useState("");
+  // Step 1 state
+  const [step, setStep]               = useState(1);
+  const [searchMode, setSearchMode]   = useState("id"); // "id" | "name"
+  const [searchVal, setSearchVal]     = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [patientFound, setPatientFound]   = useState(null); // null | false | object
+  const [action, setAction]           = useState("CREATE"); // CREATE | MODIFY | DELETE
 
-  const [formData, setFormData] = useState({
-    patient_name: "",
-    age: "",
-    gender: "",
-    diagnosis: "",
-    medication: "",
-    data: "",                                       
+  // Step 2 state
+  const [form, setForm] = useState({
+    patient_id:"", patient_name:"", age:"", gender:"Male",
     visit_date: new Date().toISOString().split("T")[0],
-    vitals: "",
+    vitals:"", diagnosis:"", medication:"", notes:""
   });
 
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [patientFound, setPatientFound] = useState(false); 
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
+  const [success, setSuccess]   = useState("");
 
-  const handleChange = (e) => {
-    setFormData((f) => ({ ...f, [e.target.name]: e.target.value }));
-  };
+  useEffect(() => { if (!userId) navigate("/"); }, [userId, navigate]);
 
-  const handleNext = async () => {
-    if (!action || !patientId) {
-      setError("Please enter patient ID and select an action.");
-      return;
-    }
+  function setF(field, value) { setForm(f => ({ ...f, [field]: value })); }
 
+  async function handleSearch(e) {
+    e.preventDefault();
+    if (!searchVal.trim()) return;
+    setSearchLoading(true); setPatientFound(null); setError("");
     try {
-      setError("");
-      const params = { user_id: userId, role: "doctor" };
-      const resp = await axios.get("/api/audit/logs", { params });
-      const allLogs = Array.isArray(resp?.data?.logs) ? resp.data.logs : [];
-      const patientLogs = allLogs
-        .filter((l) => String(l.patient_id) === String(patientId))
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-      const latest = patientLogs[0];
-
-      if (action === "modify" || action === "delete") {
-        if (!latest) {
-          setError("Patient does not exist. You can only modify/delete an existing patient’s records.");
-          return;
-        }
-      
-        if (action === "modify") {
-          navigate("/modify", { state: { patientId } });
-        } else {
-          navigate("/delete", { state: { patientId } });
-        }
-        return;
-      }
-
-      // action === "create" → ALWAYS allow adding another visit/log
-      if (latest) {
-        // Prefill demographics from the latest record to save typing
-        setPatientFound(true);
-        setFormData((f) => ({
-          ...f,
-          patient_name: latest.patient_name || f.patient_name,
-          age: latest.age || f.age,
-          gender: latest.gender || f.gender, // will show blank if you don't store gender in logs
-        }));
+      const params = { role, user_id: userId };
+      if (searchMode === "id")   params.patient_id   = searchVal.trim();
+      else                       params.patient_name  = searchVal.trim();
+      const res = await api.get("/api/audit/logs", { params });
+      const logs = res.data.logs || [];
+      if (logs.length > 0) {
+        const latest = [...logs].sort((a,b) => new Date(b.timestamp)-new Date(a.timestamp))[0];
+        setPatientFound(latest);
+        setF("patient_id",   latest.patient_id   || "");
+        setF("patient_name", latest.patient_name || "");
+        setF("age",          latest.age != null   ? String(latest.age) : "");
+        setF("gender",       latest.gender        || "Male");
       } else {
         setPatientFound(false);
+        if (searchMode === "id") setF("patient_id", searchVal.trim());
+        else                     setF("patient_name", searchVal.trim());
       }
+    } catch { setError("Search failed. Please try again."); }
+    finally  { setSearchLoading(false); }
+  }
 
-      setStep(2);
-    } catch (err) {
-      console.error("Error checking patient:", err?.response?.data || err.message);
-      setError("Error checking patient records.");
-    }
-  };
-  const handleSubmit = async (e) => {
+  function handleActionSelect(a) {
+    setAction(a);
+    if (a === "MODIFY" && patientFound) { navigate("/modify", { state: { patient: patientFound } }); return; }
+    if (a === "DELETE" && patientFound) { navigate("/delete", { state: { patient: patientFound } }); return; }
+  }
+
+  function goToStep2() {
+    if (!form.patient_id && !form.patient_name) { setError("Please search for a patient first."); return; }
+    if (!form.patient_id) { setError("Patient ID is required."); return; }
+    setError(""); setStep(2);
+  }
+
+  async function handleSubmit(e) {
     e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    const payload = {
-      user_id: userId,
-      patient_id: patientId,
-      action: (action || "create").toUpperCase(), 
-      ...formData,                                 
-    };
-
+    if (!form.patient_id || !form.diagnosis) { setError("Patient ID and Diagnosis are required."); return; }
+    setLoading(true); setError(""); setSuccess("");
     try {
-      await axios.post("/api/audit/add-log", payload, {
-        headers: { "Content-Type": "application/json" },
+      await api.post("/api/audit/add-log", {
+        user_id: userId, role,
+        patient_id:   form.patient_id,
+        patient_name: form.patient_name,
+        age:          form.age ? parseInt(form.age) : null,
+        gender:       form.gender,
+        visit_date:   form.visit_date,
+        vitals:       form.vitals,
+        diagnosis:    form.diagnosis,
+        medication:   form.medication,
+        notes:        form.notes,
+        action:       "CREATE",
       });
-      setShowSuccess(true);
-      setTimeout(() => navigate("/dashboard"), 1500);
+      setSuccess("Record saved and encrypted successfully.");
+      setTimeout(() => navigate("/logs"), 1500);
     } catch (err) {
-      console.error("API error:", err?.response?.data || err.message);
-      setError("❌ Failed to submit record.");
-    } finally {
-      setLoading(false);
-    }
+      setError(err.response?.data?.detail || "Failed to save record.");
+    } finally { setLoading(false); }
+  }
+
+  const actionBtnClass = (a) => {
+    if (action !== a) return "ehr-action-btn";
+    if (a === "CREATE") return "ehr-action-btn selected-create";
+    if (a === "MODIFY") return "ehr-action-btn selected-modify";
+    if (a === "DELETE") return "ehr-action-btn selected-delete";
+    return "ehr-action-btn";
   };
 
   return (
-    <Layout>
-      <div className="audit-wrapper">
-        <div className="audit-form-card">
-          <h2><i className="bi bi-plus-circle"></i> Add Patient Record</h2>
+    <div className="ehr-shell">
+      <Sidebar activeItem="add" />
+      <main className="ehr-main">
+        <div className="ehr-topbar">
+          <div className="ehr-breadcrumb">
+            <button type="button" onClick={() => navigate("/dashboard")}>Dashboard</button>
+            <i className="bi bi-chevron-right" style={{ fontSize:10 }} />
+            <span>Add Record</span>
+          </div>
+          <div className="ehr-topbar-title" />
+        </div>
 
+        <div className="ehr-content">
+          <div className="ehr-page-header">
+            <div className="ehr-page-title">Add Audit Record</div>
+            <div className="ehr-page-sub">Create a new encrypted clinical entry with audit trail</div>
+          </div>
+
+          {/* Step indicator */}
+          <div className="ehr-steps">
+            <div className={`ehr-step${step >= 1 ? (step > 1 ? " done" : " active") : ""}`}>
+              <div className="ehr-step-dot">{step > 1 ? <i className="bi bi-check" /> : "1"}</div>
+              Patient Lookup
+            </div>
+            <div className="ehr-step-line" />
+            <div className={`ehr-step${step >= 2 ? " active" : ""}`}>
+              <div className="ehr-step-dot">2</div>
+              Clinical Details
+            </div>
+          </div>
+
+          {error   && <div className="ehr-alert ehr-alert-error"><i className="bi bi-exclamation-circle-fill" />{error}</div>}
+          {success && <div className="ehr-alert ehr-alert-success"><i className="bi bi-check-circle-fill" />{success}</div>}
+
+          {/* ── STEP 1 ── */}
           {step === 1 && (
-            <>
-              <label className="form-label">Select Action</label>
-              <select
-                className="form-select mb-3"
-                value={action}
-                onChange={(e) => setAction(e.target.value)}
-              >
-                <option value="">-- Select Action --</option>
-                <option value="create">Create</option>
-                <option value="modify">Modify</option>
-                <option value="delete">Delete</option>
-              </select>
+            <div className="ehr-grid-2" style={{ gap:24, alignItems:"start" }}>
+              <div className="ehr-card">
+                <div className="ehr-card-header">
+                  <i className="bi bi-search" style={{ color:"var(--blue)" }} />
+                  <span className="ehr-card-title">Patient Lookup</span>
+                </div>
+                <div className="ehr-card-body">
+                  {/* Search mode toggle */}
+                  <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+                    {["id","name"].map(m => (
+                      <button key={m} onClick={() => { setSearchMode(m); setSearchVal(""); setPatientFound(null); }}
+                        className={`ehr-btn ehr-btn-sm ${searchMode===m ? "ehr-btn-primary" : "ehr-btn-ghost"}`}>
+                        Search by {m === "id" ? "Patient ID" : "Name"}
+                      </button>
+                    ))}
+                  </div>
 
-              <label className="form-label">Enter Patient ID</label>
-              <input
-                className="form-control mb-3"
-                value={patientId}
-                onChange={(e) => setPatientId(e.target.value)}
-                placeholder="Patient ID"
-              />
+                  <form onSubmit={handleSearch}>
+                    <div className="ehr-form-group">
+                      <label className="ehr-label">
+                        {searchMode === "id" ? "Patient ID" : "Patient Name"}
+                      </label>
+                      <div className="ehr-input-wrap">
+                        <i className="bi bi-search ehr-input-icon" />
+                        <input className="ehr-input" placeholder={searchMode==="id" ? "e.g. PT-001" : "e.g. Jane Doe"}
+                          value={searchVal} onChange={e => setSearchVal(e.target.value)} />
+                      </div>
+                    </div>
+                    <button type="submit" className="ehr-btn ehr-btn-ghost ehr-btn-full" disabled={searchLoading}>
+                      {searchLoading ? <><div className="ehr-spinner ehr-spinner-dark" /> Searching…</> : <><i className="bi bi-search" /> Look Up Patient</>}
+                    </button>
+                  </form>
 
-              <button className="btn btn-primary w-100" onClick={handleNext}>
-                Next
-              </button>
-            </>
+                  {patientFound && (
+                    <div className="ehr-patient-banner found" style={{ marginTop:16, marginBottom:0 }}>
+                      <i className="bi bi-person-check-fill" />
+                      <div>
+                        <div className="ehr-patient-banner-title">Existing patient found</div>
+                        <div className="ehr-patient-banner-sub">{patientFound.patient_name} · {patientFound.patient_id} · {patientFound.age ? `Age ${patientFound.age}` : ""} · {patientFound.gender}</div>
+                      </div>
+                    </div>
+                  )}
+                  {patientFound === false && (
+                    <div className="ehr-patient-banner new-pt" style={{ marginTop:16, marginBottom:0 }}>
+                      <i className="bi bi-person-plus-fill" />
+                      <div>
+                        <div className="ehr-patient-banner-title">New patient</div>
+                        <div className="ehr-patient-banner-sub">No existing records found. You'll enter demographics below.</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="ehr-card">
+                <div className="ehr-card-header">
+                  <i className="bi bi-ui-checks" style={{ color:"var(--blue)" }} />
+                  <span className="ehr-card-title">Record Action</span>
+                </div>
+                <div className="ehr-card-body">
+                  <div style={{ marginBottom:12, fontSize:13, color:"var(--text-muted)" }}>What type of record entry is this?</div>
+                  <div className="ehr-action-group" style={{ marginBottom:24 }}>
+                    <button className={actionBtnClass("CREATE")} onClick={() => handleActionSelect("CREATE")}>
+                      <i className="bi bi-plus-circle" style={{ marginRight:6 }} /> Create
+                    </button>
+                    <button className={actionBtnClass("MODIFY")} onClick={() => handleActionSelect("MODIFY")} disabled={!patientFound}>
+                      <i className="bi bi-pencil" style={{ marginRight:6 }} /> Modify
+                    </button>
+                    <button className={actionBtnClass("DELETE")} onClick={() => handleActionSelect("DELETE")} disabled={!patientFound}>
+                      <i className="bi bi-trash" style={{ marginRight:6 }} /> Delete
+                    </button>
+                  </div>
+
+                  {action === "CREATE" && (
+                    <div className="ehr-form-group" style={{ marginBottom:0 }}>
+                      <label className="ehr-label">Patient ID <span className="req">*</span></label>
+                      <input className="ehr-input" placeholder="e.g. PT-001" value={form.patient_id}
+                        onChange={e => setF("patient_id", e.target.value)} />
+                    </div>
+                  )}
+
+                  <button className="ehr-btn ehr-btn-primary ehr-btn-full" style={{ marginTop:16 }} onClick={goToStep2}>
+                    Continue to Clinical Details <i className="bi bi-arrow-right" />
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
+          {/* ── STEP 2 ── */}
           {step === 2 && (
             <form onSubmit={handleSubmit}>
-            <div className="form-grid">
-              <div>
-                <label className="form-label"><i className="bi bi-person"></i> Patient Name</label>
-                <input className="form-control" name="patient_name" value={formData.patient_name} onChange={handleChange} required />
-              </div>
-              <div>
-                <label className="form-label"><i className="bi bi-123"></i> Age</label>
-                <input className="form-control" name="age" type="number" value={formData.age} onChange={handleChange} required />
-              </div>
-          
-              <div>
-                <label className="form-label"><i className="bi bi-gender-ambiguous"></i> Gender</label>
-                <select className="form-select" name="gender" value={formData.gender} onChange={handleChange} required>
-                  <option value="">Select Gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="form-label"><i className="bi bi-capsule"></i> Medication</label>
-                <input className="form-control" name="medication" value={formData.medication} onChange={handleChange} />
-              </div>
-          
-              <div>
-                <label className="form-label"><i className="bi bi-clipboard-heart"></i> Diagnosis</label>
-                <input className="form-control" name="diagnosis" value={formData.diagnosis} onChange={handleChange} />
-              </div>
-              <div>
-                <label className="form-label"><i className="bi bi-calendar-date"></i> Visit Date</label>
-                <input className="form-control" name="visit_date" type="date" value={formData.visit_date} onChange={handleChange} />
-              </div>
-          
-              <div>
-                <label className="form-label"><i className="bi bi-heart-pulse"></i> Vital Signs</label>
-                <input className="form-control" name="vitals" placeholder="BP: 120/80, HR: 75" value={formData.vitals} onChange={handleChange} />
-              </div>
-          
-              <div>
-                <label className="form-label"><i className="bi bi-journal-text"></i> Doctor's Notes</label>
-                <textarea className="form-control" name="data" rows="4" value={formData.data} onChange={handleChange} placeholder="Add notes" />
-              </div>
-            </div>
-          
-            <button type="submit" className="btn btn-success" disabled={loading}>
-              {loading ? "Submitting..." : "Submit Record"}
-            </button>
-          
-            <button type="button" className="btn btn-outline-secondary mt-2" onClick={() => navigate("/dashboard")}>
-              Cancel
-            </button>
-          </form>
-          
-          )}
+              <div className="ehr-grid-2" style={{ gap:24, alignItems:"start" }}>
+                {/* Demographics */}
+                <div className="ehr-card">
+                  <div className="ehr-card-header">
+                    <i className="bi bi-person-vcard" style={{ color:"var(--blue)" }} />
+                    <span className="ehr-card-title">Patient Demographics</span>
+                  </div>
+                  <div className="ehr-card-body">
+                    <div className="ehr-form-group">
+                      <label className="ehr-label">Patient ID <span className="req">*</span></label>
+                      <input className="ehr-input" value={form.patient_id} onChange={e => setF("patient_id",e.target.value)} placeholder="PT-001" />
+                    </div>
+                    <div className="ehr-form-group">
+                      <label className="ehr-label">Full Name</label>
+                      <input className="ehr-input" value={form.patient_name} onChange={e => setF("patient_name",e.target.value)} placeholder="Jane Doe" />
+                    </div>
+                    <div className="ehr-grid-2">
+                      <div className="ehr-form-group">
+                        <label className="ehr-label">Age</label>
+                        <input className="ehr-input" type="number" min="0" max="150" value={form.age} onChange={e => setF("age",e.target.value)} placeholder="42" />
+                      </div>
+                      <div className="ehr-form-group">
+                        <label className="ehr-label">Gender</label>
+                        <select className="ehr-select" value={form.gender} onChange={e => setF("gender",e.target.value)}>
+                          {GENDERS.map(g => <option key={g}>{g}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="ehr-form-group">
+                      <label className="ehr-label">Visit Date</label>
+                      <input className="ehr-input" type="date" value={form.visit_date} onChange={e => setF("visit_date",e.target.value)} />
+                    </div>
+                    <div className="ehr-form-group" style={{ marginBottom:0 }}>
+                      <label className="ehr-label">Vitals</label>
+                      <input className="ehr-input" value={form.vitals} onChange={e => setF("vitals",e.target.value)} placeholder="BP 120/80, HR 72, Temp 98.6°F" />
+                    </div>
+                  </div>
+                </div>
 
-          {error && <div className="text-danger mt-3 text-center">{error}</div>}
-          {showSuccess && (
-            <div className="toast-success mt-3 text-success text-center">
-              ✔️ Record successfully submitted!
-            </div>
+                {/* Clinical */}
+                <div className="ehr-card">
+                  <div className="ehr-card-header">
+                    <i className="bi bi-clipboard2-pulse" style={{ color:"var(--teal)" }} />
+                    <span className="ehr-card-title">Clinical Details</span>
+                  </div>
+                  <div className="ehr-card-body">
+                    <div className="ehr-form-group">
+                      <label className="ehr-label">Diagnosis <span className="req">*</span></label>
+                      <input className="ehr-input" value={form.diagnosis} onChange={e => setF("diagnosis",e.target.value)} placeholder="e.g. Type 2 Diabetes Mellitus" />
+                    </div>
+                    <div className="ehr-form-group">
+                      <label className="ehr-label">Medication</label>
+                      <input className="ehr-input" value={form.medication} onChange={e => setF("medication",e.target.value)} placeholder="e.g. Metformin 500mg twice daily" />
+                    </div>
+                    <div className="ehr-form-group" style={{ marginBottom:0 }}>
+                      <label className="ehr-label">Doctor's Notes</label>
+                      <textarea className="ehr-textarea" value={form.notes} onChange={e => setF("notes",e.target.value)} placeholder="Clinical observations, follow-up instructions…" style={{ minHeight:120 }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display:"flex", gap:12, marginTop:20 }}>
+                <button type="button" className="ehr-btn ehr-btn-ghost" onClick={() => setStep(1)}>
+                  <i className="bi bi-arrow-left" /> Back
+                </button>
+                <button type="submit" className="ehr-btn ehr-btn-primary" disabled={loading}>
+                  {loading
+                    ? <><div className="ehr-spinner" /> Encrypting &amp; Saving…</>
+                    : <><i className="bi bi-shield-lock-fill" /> Save Encrypted Record</>
+                  }
+                </button>
+              </div>
+            </form>
           )}
         </div>
-      </div>
-    </Layout>
+      </main>
+    </div>
   );
 }
-
-export default AddAuditRecord;

@@ -1,27 +1,34 @@
 from pydantic import BaseModel
 from typing import Optional
 
+
 class RegisterUser(BaseModel):
     user_id: str
     password: str
     role: str
+
 
 class LoginUser(BaseModel):
     user_id: str
     password: str
     role: str
 
+
 class AuditLogCreate(BaseModel):
     user_id: str
     patient_id: str
     action: str
-    data: str
+    data: str           # maps to notes column
     patient_name: str
     age: int
     diagnosis: str
     medication: str
+    # Fields the frontend sends that were previously silently dropped
+    gender: Optional[str] = None
+    visit_date: Optional[str] = None
+    vitals: Optional[str] = None
 
-    
+
 class ModifyAuditLog(BaseModel):
     patient_name: Optional[str] = None
     age: Optional[int] = None
@@ -31,4 +38,3 @@ class ModifyAuditLog(BaseModel):
     notes: Optional[str] = None
     visit_date: Optional[str] = None
     vitals: Optional[str] = None
-

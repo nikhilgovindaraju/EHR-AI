@@ -1,197 +1,269 @@
-import React, { useState, useEffect, useRef } from "react";
-import "../styles/chatbot.css";
-import axios from "../services/api";
-import swoosh from "../assets/woosh.wav";
+import React, { useState, useRef, useEffect } from "react";
+import api from "../services/api";
 
-function AuditChatbot() {
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { type: "bot", text: "👋 Hi! I’m your SecureEHR Assistant. Ask about a patient or your recent cases." }
-  ]);
-  const [input, setInput] = useState("");
+/* ── Role-specific quick suggestions ─────────────────────────────────────── */
+const ROLE_SUGGESTIONS = {
+  doctor: [
+    "Summarize today's patients",
+    "List recent diagnoses",
+    "Show medication trends",
+    "Which patients were seen this week?",
+    "Most common condition?",
+  ],
+  auditor: [
+    "How many records are in the system?",
+    "How many unique patients?",
+    "Most common diagnosis?",
+    "Show recent activity",
+    "Any anomalies in records?",
+  ],
+  patient: [
+    "What was my last visit?",
+    "What medications am I on?",
+    "Show my diagnosis history",
+    "Summarize my health records",
+    "When was I last seen?",
+  ],
+};
+
+const ROLE_META = {
+  doctor:  { label: "Clinical Assistant",   sub: "Patient records & clinical insights", icon: "bi-hospital",         color: "#0052CC" },
+  auditor: { label: "Compliance Assistant", sub: "Audit trails & data integrity",       icon: "bi-clipboard-check",  color: "#006D6D" },
+  patient: { label: "Health Assistant",     sub: "Your personal health summary",        icon: "bi-heart-pulse-fill", color: "#1A6B3C" },
+};
+
+/* ── Render bot message with bullet list support ──────────────────────────── */
+function BotMessage({ text }) {
+  if (!text) return null;
+  const lines = text.split("\n");
+  const blocks = [];
+  let bullets = [];
+
+  lines.forEach(line => {
+    const t = line.trim();
+    if (t.startsWith("•") || t.startsWith("-") || t.startsWith("*")) {
+      bullets.push(t.replace(/^[•\-*]\s*/, ""));
+    } else {
+      if (bullets.length) { blocks.push({ type: "bullets", items: [...bullets] }); bullets = []; }
+      if (t) blocks.push({ type: "text", content: t });
+    }
+  });
+  if (bullets.length) blocks.push({ type: "bullets", items: bullets });
+
+  return (
+    <div>
+      {blocks.map((b, i) =>
+        b.type === "bullets" ? (
+          <ul key={i} style={{ margin: "6px 0", paddingLeft: 0, listStyle: "none" }}>
+            {b.items.map((item, j) => (
+              <li key={j} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 4 }}>
+                <span style={{ color: "var(--blue)", fontWeight: 700, flexShrink: 0 }}>•</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p key={i} style={{ margin: i === 0 ? 0 : "6px 0 0", lineHeight: 1.6 }}>{b.content}</p>
+        )
+      )}
+    </div>
+  );
+}
+
+function fmtDate(ts) {
+  if (!ts) return null;
+  try { return new Date(ts).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }); }
+  catch { return ts; }
+}
+
+/* ── Role badge ───────────────────────────────────────────────────────────── */
+function RoleBadge({ role }) {
+  const colors = { doctor: "#0052CC", auditor: "#006D6D", patient: "#1A6B3C" };
+  const labels = { doctor: "Doctor view", auditor: "Auditor view", patient: "Patient view" };
+  const c = colors[role] || "#0052CC";
+  return (
+    <span style={{
+      fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 100,
+      background: `${c}22`, color: c, border: `1px solid ${c}44`,
+    }}>
+      {labels[role] || role}
+    </span>
+  );
+}
+
+export default function AuditChatbot() {
+  const userId = localStorage.getItem("user_id") || "";
+  const role   = (localStorage.getItem("role") || "doctor").toLowerCase();
+
+  const meta        = ROLE_META[role]   || ROLE_META.doctor;
+  const suggestions = ROLE_SUGGESTIONS[role] || ROLE_SUGGESTIONS.doctor;
+
+  const WELCOME = {
+    doctor:  `Hi Dr. ${userId}! I can help you review patient records, diagnoses, medications, and visit history. What would you like to know?`,
+    auditor: `Hello, ${userId}. I'm your compliance assistant. I can query record counts, flag anomalies, and summarize audit data. What do you need?`,
+    patient: `Hi ${userId}! I'm here to help you understand your health records in plain language. Feel free to ask about your visits, medications, or diagnoses.`,
+  };
+
+  const [open, setOpen]           = useState(false);
   const [patientId, setPatientId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [showContextIdx, setShowContextIdx] = useState(null);
-
-  const messagesEndRef = useRef(null);
-  const audioRef = useRef(null);
-
-  const userId = localStorage.getItem("user_id");
-  const role = localStorage.getItem("role");
-
-  const storedPatientId = (localStorage.getItem("patient_id") || "").trim();
-
-useEffect(() => {
-  if (role === "patient") {
-    setPatientId(storedPatientId || userId || "");
-  }
-}, [role, storedPatientId, userId]);
-
-  const quickQuestions = [
-    "Show Patient1’s last visit summary",
-    "List the most common diagnosis in my last 10 cases",
-    "Summarize medications for Patient1",
-    "When was the last visit?"
-  ];
+  const [messages, setMessages]   = useState([
+    { role: "bot", text: WELCOME[role] || WELCOME.doctor },
+  ]);
+  const [input, setInput]     = useState("");
+  const [thinking, setThinking] = useState(false);
+  const bodyRef = useRef(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+    if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [messages, thinking]);
 
-  const playSound = () => audioRef.current?.play();
-
-  const sendMessage = async (preset) => {
-    const content = preset || input.trim();
-    if (!content) return;
-
-    setMessages((prev) => [...prev, { type: "user", text: content }]);
+  async function sendMessage(text) {
+    const q = (text || input).trim();
+    if (!q) return;
     setInput("");
-    playSound();
-    setLoading(true);
-
+    setMessages(m => [...m, { role: "user", text: q }]);
+    setThinking(true);
     try {
-      const { data } = await axios.post("/api/audit/chat", {
-        user_id: userId,
+      const res = await api.post("/api/audit/chat", {
+        user_id:    userId,
         role,
-        question: content,
-        patient_id: role === "patient" ? (patientId || userId) : (patientId || undefined),
-        patient_name: role === "patient" ? userId : undefined,
+        question:   q,
+        patient_id: patientId || undefined,
+        limit:      20,
       });
+      const data  = res.data;
+      setMessages(m => [...m, {
+        role:   "bot",
+        text:   data.answer || "I couldn't find an answer to that.",
+        stats:  data.stats || {},
+      }]);
+    } catch {
+      setMessages(m => [...m, {
+        role: "bot",
+        text: "Sorry, I couldn't reach the AI service right now. Please check your connection and try again.",
+      }]);
+    } finally { setThinking(false); }
+  }
 
-      const botMsg = {
-        type: "bot",
-        text: data?.answer || "🤖 I couldn't find the answer to that.",
-        stats: data?.stats || null,
-        rows: Array.isArray(data?.rows) ? data.rows : [],
-      };
-      setMessages((prev) => [...prev, botMsg]);
-      playSound();
-    } catch (err) {
-      console.error("Chat error:", err?.response?.data || err.message);
-      setMessages((prev) => [
-        ...prev,
-        { type: "bot", text: "❌ Error processing your request." },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  function handleKey(e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  }
 
-  const StatChips = ({ stats }) => {
-    if (!stats) return null;
-    const diag = (stats.top_diagnoses || []).map(([d, c]) => `${d} (${c})`).join(", ");
-    const meds = (stats.top_medications || []).map(([m, c]) => `${m} (${c})`).join(", ");
-    return (
-      <div className="chatbot-stats">
-        <span className="chip">Total logs: {stats.total_logs}</span>
-        {stats.last_visit && <span className="chip">Last visit: {new Date(stats.last_visit).toLocaleString()}</span>}
-        {diag && <span className="chip">Top Dx: {diag}</span>}
-        {meds && <span className="chip">Top Meds: {meds}</span>}
-      </div>
-    );
-  };
-
-  const ContextTable = ({ rows }) => {
-    if (!rows || rows.length === 0) return <div className="text-muted">No context records.</div>;
-    return (
-      <div className="ctx-table-wrap">
-        <table className="ctx-table">
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>Patient</th>
-              <th>Age</th>
-              <th>Diagnosis</th>
-              <th>Medication</th>
-              <th>Notes</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i}>
-                <td>{r.timestamp ? new Date(r.timestamp).toLocaleString() : "—"}</td>
-                <td>{r.patient_name || r.patient_id || "—"}</td>
-                <td>{r.age ?? "—"}</td>
-                <td>{r.diagnosis || "—"}</td>
-                <td>{r.medication || "—"}</td>
-                <td>{(r.notes || "").toString().trim() || "—"}</td>
-                <td>{r.action || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
+  const headerColor = meta.color;
 
   return (
     <>
-      <audio ref={audioRef} src={swoosh} preload="auto" />
-      {!open && (
-        <div className="chatbot-button" onClick={() => setOpen(true)}>
-          <i className="bi bi-chat-dots-fill"></i>
-        </div>
-      )}
+      {/* FAB */}
+      <button
+        className="ehr-chatbot-fab"
+        onClick={() => setOpen(o => !o)}
+        title={meta.label}
+        style={{ background: `linear-gradient(135deg, ${headerColor}, ${headerColor}CC)` }}
+      >
+        <i className={`bi ${open ? "bi-x-lg" : meta.icon}`} />
+      </button>
+
       {open && (
-        <div className="chatbot-window">
-          <div className="chatbot-header">
-            <span>SecureEHR Assistant</span>
-            <button className="close-btn" onClick={() => setOpen(false)}>
-              &times;
+        <div className="ehr-chatbot-window">
+          {/* Header — colour-coded by role */}
+          <div className="ehr-chat-header" style={{ background: `linear-gradient(135deg, ${headerColor} 0%, ${headerColor}CC 100%)` }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: "50%",
+              background: "rgba(255,255,255,0.18)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 16, flexShrink: 0,
+            }}>
+              <i className={`bi ${meta.icon}`} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="ehr-chat-header-title">{meta.label}</span>
+                <RoleBadge role={role} />
+              </div>
+              <div className="ehr-chat-header-sub">{meta.sub}</div>
+            </div>
+            <button className="ehr-chat-close" onClick={() => setOpen(false)}>
+              <i className="bi bi-x-lg" />
             </button>
           </div>
 
-          {/* Optional target patient */}
-          <div className="chatbot-toolbar">
-            <input
-              className="chatbot-patient"
-              placeholder="(Optional) Patient ID, e.g., Patient1"
-              value={patientId}
-              onChange={(e) => setPatientId(e.target.value)}
-            />
-          </div>
+          {/* Patient filter — only for doctor / auditor */}
+          {role !== "patient" && (
+            <div className="ehr-chat-patient-bar">
+              <input
+                placeholder={role === "auditor" ? "Filter by patient ID to drill down…" : "Filter by patient ID (optional)…"}
+                value={patientId}
+                onChange={e => setPatientId(e.target.value)}
+              />
+            </div>
+          )}
 
-          <div className="chatbot-body">
-            {messages.map((m, i) => (
-              <div key={i} className={`message ${m.type}`}>
-                <div style={{ whiteSpace: "pre-wrap" }}>{m.text}</div>
+          {/* Messages */}
+          <div className="ehr-chat-body" ref={bodyRef}>
+            {messages.map((msg, i) => (
+              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                <div className={`ehr-chat-msg ${msg.role}`} style={msg.role === "user" ? { background: headerColor } : {}}>
+                  {msg.role === "bot" ? <BotMessage text={msg.text} /> : msg.text}
+                </div>
 
-                {/* Render stats + toggle for context when present */}
-                {m.type === "bot" && (!/^(last visit:|medications mentioned|your doctor|recent visits summary)/i.test(m.text)) && (m.stats || (m.rows && m.rows.length > 0)) && (
-                  <>
-                    <StatChips stats={m.stats} />
-                    <button
-                      className="ctx-toggle"
-                      onClick={() => setShowContextIdx(showContextIdx === i ? null : i)}
-                    >
-                      {showContextIdx === i ? "Hide context ▲" : "Show context ▼"}
-                    </button>
-                    {showContextIdx === i && <ContextTable rows={m.rows} />}
-                  </>
+                {msg.role === "bot" && msg.stats && (
+                  <div className="ehr-chat-stats">
+                    {msg.stats.total_logs > 0 && (
+                      <span className="ehr-chat-chip">
+                        <i className="bi bi-journal" style={{ marginRight: 4 }} />
+                        {msg.stats.total_logs} record{msg.stats.total_logs !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                    {msg.stats.last_visit && (
+                      <span className="ehr-chat-chip">
+                        <i className="bi bi-calendar3" style={{ marginRight: 4 }} />
+                        {fmtDate(msg.stats.last_visit)}
+                      </span>
+                    )}
+                    {(msg.stats.top_diagnoses || []).slice(0, 2).map(([dx], j) => (
+                      <span key={j} className="ehr-chat-chip">{dx}</span>
+                    ))}
+                  </div>
                 )}
               </div>
             ))}
-            {loading && <div className="message bot">⏳ Thinking…</div>}
-            <div ref={messagesEndRef} />
+            {thinking && (
+              <div className="ehr-chat-thinking">
+                <span>●</span><span>●</span><span>●</span>
+              </div>
+            )}
           </div>
 
-          <div className="chatbot-faq">
-            {quickQuestions.map((q, idx) => (
-              <button key={idx} onClick={() => sendMessage(q)}>{q}</button>
+          {/* Suggestions */}
+          <div className="ehr-chat-suggestions">
+            {suggestions.map((s, i) => (
+              <button key={i} className="ehr-chat-suggestion" onClick={() => sendMessage(s)}
+                style={{ borderColor: `${headerColor}44`, color: headerColor, background: `${headerColor}12` }}>
+                {s}
+              </button>
             ))}
           </div>
 
-          <div className="chatbot-input-area">
+          {/* Input */}
+          <div className="ehr-chat-input-row">
             <input
-              type="text"
-              placeholder='Try: "Show Patient1’s last visit summary"'
+              placeholder={
+                role === "patient"  ? "Ask about your health records…" :
+                role === "auditor"  ? "Query records, counts, anomalies…" :
+                                     "Ask about patients or diagnoses…"
+              }
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKey}
+              disabled={thinking}
             />
-            <button onClick={() => sendMessage()}>
-              <i className="bi bi-send-fill"></i>
+            <button
+              className="ehr-chat-send"
+              onClick={() => sendMessage()}
+              disabled={thinking || !input.trim()}
+              style={{ background: headerColor }}
+            >
+              <i className="bi bi-send-fill" />
             </button>
           </div>
         </div>
@@ -199,6 +271,3 @@ useEffect(() => {
     </>
   );
 }
-
-export default AuditChatbot;
-
